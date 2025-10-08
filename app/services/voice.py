@@ -42,6 +42,25 @@ def get_siliconflow_voices() -> list[str]:
     ]
 
 
+def get_openai_tts_voices() -> list[str]:
+    """
+    获取OpenAI TTS的声音列表
+
+    Returns:
+        声音列表，格式为 ["openai-tts:alloy-Male", ...]
+    """
+    voices_with_gender = [
+        ("alloy", "Male"),
+        ("echo", "Male"),
+        ("fable", "Male"),
+        ("onyx", "Male"),
+        ("nova", "Female"),
+        ("shimmer", "Female"),
+    ]
+
+    return [f"openai-tts:{voice}-{gender}" for voice, gender in voices_with_gender]
+
+
 def get_all_azure_voices(filter_locals=None) -> list[str]:
     azure_voices_str = """
 Name: af-ZA-AdriNeural
@@ -1077,6 +1096,11 @@ def is_siliconflow_voice(voice_name: str):
     return voice_name.startswith("siliconflow:")
 
 
+def is_openai_tts_voice(voice_name: str):
+    """检查是否是OpenAI TTS的声音"""
+    return voice_name.startswith("openai-tts:")
+
+
 def tts(
     text: str,
     voice_name: str,
@@ -1102,6 +1126,18 @@ def tts(
             )
         else:
             logger.error(f"Invalid siliconflow voice name format: {voice_name}")
+            return None
+    elif is_openai_tts_voice(voice_name):
+        # 从voice_name中提取声音
+        # 格式: openai-tts:voice-Gender
+        parts = voice_name.split(":")
+        if len(parts) >= 2:
+            # 移除性别后缀，例如 "alloy-Male" -> "alloy"
+            voice_with_gender = parts[1]
+            voice = voice_with_gender.split("-")[0]
+            return openai_tts(text, voice, voice_rate, voice_file)
+        else:
+            logger.error(f"Invalid openai-tts voice name format: {voice_name}")
             return None
     return azure_tts_v1(text, voice_name, voice_rate, voice_file)
 
@@ -1285,6 +1321,140 @@ def siliconflow_tts(
                 )
         except Exception as e:
             logger.error(f"siliconflow tts failed: {str(e)}")
+
+    return None
+
+
+def openai_tts(
+    text: str,
+    voice: str,
+    voice_rate: float,
+    voice_file: str,
+) -> Union[SubMaker, None]:
+    """
+    使用OpenAI TTS API生成语音
+
+    Args:
+        text: 要转换为语音的文本
+        voice: 声音名称，如 "alloy", "echo", "fable", "onyx", "nova", "shimmer"
+        voice_rate: 语音速度，范围[0.25, 4.0]
+        voice_file: 输出的音频文件路径
+
+    Returns:
+        SubMaker对象或None
+    """
+    text = text.strip()
+    api_key = config.openai_tts.get("api_key", "")
+    base_url = config.openai_tts.get("base_url", "https://api.openai.com/v1")
+    model = config.openai_tts.get("model", "tts-1")
+
+    if not api_key:
+        logger.error("OpenAI TTS API key is not set")
+        return None
+
+    # Ensure base_url ends with /audio/speech
+    if not base_url.endswith("/audio/speech"):
+        base_url = base_url.rstrip("/") + "/audio/speech"
+
+    # Clamp speed to valid range [0.25, 4.0]
+    speed = max(0.25, min(4.0, voice_rate))
+
+    payload = {
+        "model": model,
+        "input": text,
+        "voice": voice,
+        "response_format": "mp3",
+        "speed": speed,
+    }
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+
+    for i in range(3):  # 尝试3次
+        try:
+            logger.info(
+                f"start openai tts, model: {model}, voice: {voice}, speed: {speed}, try: {i + 1}"
+            )
+
+            response = requests.post(base_url, json=payload, headers=headers)
+
+            if response.status_code == 200:
+                # 保存音频文件
+                with open(voice_file, "wb") as f:
+                    f.write(response.content)
+
+                # 创建一个空的SubMaker对象
+                sub_maker = SubMaker()
+
+                # 获取音频文件的实际长度
+                try:
+                    # 尝试使用moviepy获取音频长度
+                    from moviepy import AudioFileClip
+
+                    audio_clip = AudioFileClip(voice_file)
+                    audio_duration = audio_clip.duration
+                    audio_clip.close()
+
+                    # 将音频长度转换为100纳秒单位（与edge_tts兼容）
+                    audio_duration_100ns = int(audio_duration * 10000000)
+
+                    # 使用文本分割来创建更准确的字幕
+                    # 将文本按标点符号分割成句子
+                    sentences = utils.split_string_by_punctuations(text)
+
+                    if sentences:
+                        # 计算每个句子的大致时长（按字符数比例分配）
+                        total_chars = sum(len(s) for s in sentences)
+                        char_duration = (
+                            audio_duration_100ns / total_chars if total_chars > 0 else 0
+                        )
+
+                        current_offset = 0
+                        for sentence in sentences:
+                            if not sentence.strip():
+                                continue
+
+                            # 计算当前句子的时长
+                            sentence_chars = len(sentence)
+                            sentence_duration = int(sentence_chars * char_duration)
+
+                            # 添加到SubMaker
+                            sub_maker.subs.append(sentence)
+                            sub_maker.offset.append(
+                                (current_offset, current_offset + sentence_duration)
+                            )
+
+                            # 更新偏移量
+                            current_offset += sentence_duration
+                    else:
+                        # 如果无法分割，则使用整个文本作为一个字幕
+                        sub_maker.subs = [text]
+                        sub_maker.offset = [(0, audio_duration_100ns)]
+
+                except Exception as e:
+                    logger.warning(f"Failed to create accurate subtitles: {str(e)}")
+                    # 回退到简单的字幕
+                    sub_maker.subs = [text]
+                    # 使用音频文件的实际长度，如果无法获取，则假设为10秒
+                    sub_maker.offset = [
+                        (
+                            0,
+                            audio_duration_100ns
+                            if "audio_duration_100ns" in locals()
+                            else 10000000,
+                        )
+                    ]
+
+                logger.success(f"openai tts succeeded: {voice_file}")
+                return sub_maker
+            else:
+                logger.error(
+                    f"openai tts failed with status code {response.status_code}: {response.text}"
+                )
+        except Exception as e:
+            logger.error(f"openai tts failed: {str(e)}")
 
     return None
 
