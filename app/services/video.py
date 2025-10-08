@@ -48,8 +48,16 @@ class SubClippedVideoClip:
 
 
 audio_codec = "aac"
-video_codec = "libx264"
+video_codec = "h264_nvenc"  # GPU-accelerated NVIDIA NVENC encoder
 fps = 30
+
+# NVENC encoding parameters (FFmpeg 6.1 syntax)
+nvenc_params = [
+    "-preset", "p4",           # NVENC preset: p1 (fastest) to p7 (slowest/best quality)
+    "-b:v", "5M",              # Target bitrate: 5 Mbps
+    "-maxrate", "8M",          # Maximum bitrate: 8 Mbps
+    "-bufsize", "10M",         # Buffer size for rate control
+]
 
 def close_clip(clip):
     if clip is None:
@@ -219,7 +227,7 @@ def combine_videos(
                 
             # wirte clip to temp file
             clip_file = f"{output_dir}/temp-clip-{i+1}.mp4"
-            clip.write_videofile(clip_file, logger=None, fps=fps, codec=video_codec)
+            clip.write_videofile(clip_file, logger=None, fps=fps, codec=video_codec, ffmpeg_params=nvenc_params)
             
             close_clip(clip)
         
@@ -281,7 +289,9 @@ def combine_videos(
                 logger=None,
                 temp_audiofile_path=output_dir,
                 audio_codec=audio_codec,
+                codec=video_codec,
                 fps=fps,
+                ffmpeg_params=nvenc_params,
             )
             close_clip(base_clip)
             close_clip(next_clip)
@@ -475,10 +485,12 @@ def generate_video(
     video_clip.write_videofile(
         output_file,
         audio_codec=audio_codec,
+        codec=video_codec,
         temp_audiofile_path=output_dir,
         threads=params.n_threads or 2,
         logger=None,
         fps=fps,
+        ffmpeg_params=nvenc_params,
     )
     video_clip.close()
     del video_clip
@@ -524,7 +536,7 @@ def preprocess_video(materials: List[MaterialInfo], clip_duration=4):
 
             # Output the video to a file.
             video_file = f"{material.url}.mp4"
-            final_clip.write_videofile(video_file, fps=30, logger=None)
+            final_clip.write_videofile(video_file, fps=30, logger=None, codec=video_codec, ffmpeg_params=nvenc_params)
             close_clip(clip)
             material.url = video_file
             logger.success(f"image processed: {video_file}")

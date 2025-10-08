@@ -12,6 +12,16 @@ services:
     command: [ "streamlit", "run", "./webui/Main.py","--browser.serverAddress=127.0.0.1","--server.enableCORS=True","--browser.gatherUsageStats=False" ]
     volumes: *common-volumes
     restart: always
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu, compute, utility, video]
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+
   api:
     build:
       context: .
@@ -22,3 +32,12 @@ services:
     command: [ "python3", "main.py" ]
     volumes: *common-volumes
     restart: always
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu, compute, utility, video]
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
