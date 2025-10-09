@@ -1,5 +1,5 @@
 [app]
-video_source = "pexels" # "pexels" or "pixabay"
+video_source = "pexels" # "pexels", "pixabay", "tiktok", or "douyin"
 
 # 是否隐藏配置面板
 hide_config = false
@@ -17,6 +17,30 @@ pexels_api_keys = []
 # For example: pixabay_api_keys = ["123adsf4567adf89","abd1321cd13efgfdfhi"]
 # 特别注意格式，Key 用英文双引号括起来，多个Key用逗号隔开
 pixabay_api_keys = []
+
+########## TikTok/Douyin Settings
+# TikHub API Settings (Paid service with search capability)
+# Register at https://tikhub.io/ to get API access
+# If use_tikhub_api is false, will attempt to use free douyin.wtf API (limited functionality)
+use_tikhub_api = false
+tikhub_api_key = ""
+tikhub_api_base = "https://api.tikhub.io"
+
+# Free douyin.wtf API (no search, only video download by URL)
+douyin_api_base = "https://api.douyin.wtf"
+
+# Platform selection: "douyin" (China) or "tiktok" (International)
+tiktok_platform = "douyin"
+
+# Douyin Cookie (Required for bypassing anti-bot verification)
+# How to get cookies:
+# 1. Open https://www.douyin.com in your browser
+# 2. Open Developer Tools (F12)
+# 3. Go to Network tab, refresh page
+# 4. Find any request to douyin.com
+# 5. Copy the entire Cookie header value
+# Example: "__ac_nonce=abc123; ttwid=1%7Cxyz; ..."
+douyin_cookie = ""
 
 # 支持的提供商 (Supported providers):
 #   openai
@@ -171,7 +195,7 @@ max_concurrent_tasks = 5
 [whisper]
 # Only effective when subtitle_provider is "whisper"
 
-# Run on GPU with FP16
+# Run on GPU with FP16 (Recommended for NVIDIA GPUs)
 # model = WhisperModel(model_size, device="cuda", compute_type="float16")
 
 # Run on GPU with INT8
@@ -182,9 +206,9 @@ max_concurrent_tasks = 5
 
 # recommended model_size: "large-v3"
 model_size = "large-v3"
-# if you want to use GPU, set device="cuda"
-device = "CPU"
-compute_type = "int8"
+# For GPU acceleration, set device="cuda" and compute_type="float16"
+device = "cuda"
+compute_type = "float16"
 
 
 [proxy]

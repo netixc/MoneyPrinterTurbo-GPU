@@ -10,6 +10,7 @@ from moviepy.video.io.VideoFileClip import VideoFileClip
 from app.config import config
 from app.models.schema import MaterialInfo, VideoAspect, VideoConcatMode
 from app.utils import utils
+from app.services.tiktok_crawler import TikTokCrawler
 
 requested_count = 0
 
@@ -144,6 +145,48 @@ def search_videos_pixabay(
     return []
 
 
+def search_videos_tiktok(
+    search_term: str,
+    minimum_duration: int,
+    video_aspect: VideoAspect = VideoAspect.portrait,
+) -> List[MaterialInfo]:
+    """
+    Search TikTok/Douyin for videos by keyword using TikHub API
+    """
+    try:
+        crawler = TikTokCrawler()
+
+        # Choose platform based on configuration
+        platform = config.app.get("tiktok_platform", "douyin")  # or "tiktok"
+
+        results = crawler.search_videos_by_keyword(
+            keyword=search_term,
+            count=20,
+            platform=platform
+        )
+
+        video_items = []
+        for video in results:
+            # Filter by minimum duration
+            if video.get("duration", 0) < minimum_duration:
+                continue
+
+            item = MaterialInfo()
+            item.provider = f"tiktok_{platform}"
+            item.url = video.get("download_url", "")
+            item.duration = int(video.get("duration", 0))
+
+            if item.url:  # Only add if we have a valid URL
+                video_items.append(item)
+
+        logger.info(f"found {len(video_items)} TikTok/Douyin videos for '{search_term}'")
+        return video_items
+
+    except Exception as e:
+        logger.error(f"TikTok/Douyin search failed: {str(e)}")
+        return []
+
+
 def save_video(video_url: str, save_dir: str = "") -> str:
     if not save_dir:
         save_dir = utils.storage_dir("cache_videos")
@@ -209,6 +252,8 @@ def download_videos(
     search_videos = search_videos_pexels
     if source == "pixabay":
         search_videos = search_videos_pixabay
+    elif source == "tiktok" or source == "douyin":
+        search_videos = search_videos_tiktok
 
     for search_term in search_terms:
         video_items = search_videos(

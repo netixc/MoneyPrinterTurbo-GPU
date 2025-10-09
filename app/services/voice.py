@@ -44,12 +44,22 @@ def get_siliconflow_voices() -> list[str]:
 
 def get_openai_tts_voices() -> list[str]:
     """
-    获取OpenAI TTS的声音列表
+    获取OpenAI TTS的声音列表，从配置的API端点获取
 
     Returns:
         声音列表，格式为 ["openai-tts:alloy-Male", ...]
     """
-    voices_with_gender = [
+    api_key = config.openai_tts.get("api_key", "")
+    base_url = config.openai_tts.get("base_url", "https://api.openai.com/v1")
+
+    # Construct voices endpoint URL
+    if not base_url.endswith("/audio/voices"):
+        voices_url = base_url.rstrip("/") + "/audio/voices"
+    else:
+        voices_url = base_url
+
+    # Fallback hardcoded voices in case API call fails
+    fallback_voices = [
         ("alloy", "Male"),
         ("echo", "Male"),
         ("fable", "Male"),
@@ -58,7 +68,34 @@ def get_openai_tts_voices() -> list[str]:
         ("shimmer", "Female"),
     ]
 
-    return [f"openai-tts:{voice}-{gender}" for voice, gender in voices_with_gender]
+    if not api_key:
+        logger.warning("OpenAI TTS API key is not set, using fallback voices")
+        return [f"openai-tts:{voice}-{gender}" for voice, gender in fallback_voices]
+
+    try:
+        headers = {"Authorization": f"Bearer {api_key}"}
+        response = requests.get(voices_url, headers=headers, timeout=10)
+
+        if response.status_code == 200:
+            voices_data = response.json()
+            # Expected format: {"voices": [{"name": "alloy", "gender": "Male"}, ...]}
+            # Adjust based on actual API response format
+            if isinstance(voices_data, dict) and "voices" in voices_data:
+                voices_list = voices_data["voices"]
+                return [f"openai-tts:{v['name']}-{v.get('gender', 'Unknown')}" for v in voices_list]
+            elif isinstance(voices_data, list):
+                # If API returns list directly
+                return [f"openai-tts:{v['name']}-{v.get('gender', 'Unknown')}" for v in voices_data]
+            else:
+                logger.warning(f"Unexpected voices API response format, using fallback")
+                return [f"openai-tts:{voice}-{gender}" for voice, gender in fallback_voices]
+        else:
+            logger.warning(f"Failed to fetch voices from {voices_url}, status: {response.status_code}, using fallback")
+            return [f"openai-tts:{voice}-{gender}" for voice, gender in fallback_voices]
+
+    except Exception as e:
+        logger.warning(f"Error fetching OpenAI TTS voices: {str(e)}, using fallback")
+        return [f"openai-tts:{voice}-{gender}" for voice, gender in fallback_voices]
 
 
 def get_all_azure_voices(filter_locals=None) -> list[str]:

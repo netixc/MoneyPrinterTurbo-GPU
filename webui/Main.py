@@ -634,6 +634,7 @@ with middle_panel:
             ("azure-tts-v1", "Azure TTS V1"),
             ("azure-tts-v2", "Azure TTS V2"),
             ("siliconflow", "SiliconFlow TTS"),
+            ("openai-tts", "OpenAI TTS"),
         ]
 
         # 获取保存的TTS服务器，默认为v1
@@ -660,6 +661,9 @@ with middle_panel:
         if selected_tts_server == "siliconflow":
             # 获取硅基流动的声音列表
             filtered_voices = voice.get_siliconflow_voices()
+        elif selected_tts_server == "openai-tts":
+            # 获取OpenAI TTS的声音列表
+            filtered_voices = voice.get_openai_tts_voices()
         else:
             # 获取Azure的声音列表
             all_voices = voice.get_all_azure_voices(filter_locals=None)
@@ -701,19 +705,36 @@ with middle_panel:
 
         # 确保有声音可选
         if friendly_names:
-            selected_friendly_name = st.selectbox(
-                tr("Speech Synthesis"),
-                options=list(friendly_names.values()),
-                index=min(saved_voice_name_index, len(friendly_names) - 1)
-                if friendly_names
-                else 0,
-            )
+            # 对于OpenAI TTS，使用文本输入框而不是下拉选择
+            if selected_tts_server == "openai-tts":
+                saved_openai_voice = config.openai_tts.get("voice", "af_heart")
 
-            voice_name = list(friendly_names.keys())[
-                list(friendly_names.values()).index(selected_friendly_name)
-            ]
-            params.voice_name = voice_name
-            config.ui["voice_name"] = voice_name
+                openai_voice_input = st.text_input(
+                    tr("Voice Name"),
+                    value=saved_openai_voice,
+                    help=tr("Enter the voice name (e.g., af_heart, af_bella, af_sarah)"),
+                    key="openai_tts_voice_input",
+                )
+
+                # 构建完整的voice_name格式: openai-tts:voice-Unknown
+                voice_name = f"openai-tts:{openai_voice_input}-Unknown"
+                params.voice_name = voice_name
+                config.ui["voice_name"] = voice_name
+                config.openai_tts["voice"] = openai_voice_input
+            else:
+                selected_friendly_name = st.selectbox(
+                    tr("Speech Synthesis"),
+                    options=list(friendly_names.values()),
+                    index=min(saved_voice_name_index, len(friendly_names) - 1)
+                    if friendly_names
+                    else 0,
+                )
+
+                voice_name = list(friendly_names.keys())[
+                    list(friendly_names.values()).index(selected_friendly_name)
+                ]
+                params.voice_name = voice_name
+                config.ui["voice_name"] = voice_name
         else:
             # 如果没有声音可选，显示提示信息
             st.warning(
@@ -802,6 +823,39 @@ with middle_panel:
             )
 
             config.siliconflow["api_key"] = siliconflow_api_key
+
+        # 当选择OpenAI TTS时，显示API配置输入框
+        if selected_tts_server == "openai-tts" or (
+            voice_name and voice.is_openai_tts_voice(voice_name)
+        ):
+            saved_openai_tts_api_key = config.openai_tts.get("api_key", "")
+            saved_openai_tts_base_url = config.openai_tts.get("base_url", "https://api.openai.com/v1")
+            saved_openai_tts_model = config.openai_tts.get("model", "tts-1")
+
+            openai_tts_api_key = st.text_input(
+                tr("OpenAI TTS API Key"),
+                value=saved_openai_tts_api_key,
+                type="password",
+                key="openai_tts_api_key_input",
+            )
+
+            openai_tts_base_url = st.text_input(
+                tr("OpenAI TTS Base URL"),
+                value=saved_openai_tts_base_url,
+                help=tr("Custom base URL for OpenAI TTS API or compatible endpoints"),
+                key="openai_tts_base_url_input",
+            )
+
+            openai_tts_model = st.text_input(
+                tr("OpenAI TTS Model"),
+                value=saved_openai_tts_model,
+                help=tr("Model name (e.g., tts-1, tts-1-hd, kokoro)"),
+                key="openai_tts_model_input",
+            )
+
+            config.openai_tts["api_key"] = openai_tts_api_key
+            config.openai_tts["base_url"] = openai_tts_base_url
+            config.openai_tts["model"] = openai_tts_model
 
         params.voice_volume = st.selectbox(
             tr("Speech Volume"),
@@ -916,7 +970,7 @@ if start_button:
         scroll_to_bottom()
         st.stop()
 
-    if params.video_source not in ["pexels", "pixabay", "local"]:
+    if params.video_source not in ["pexels", "pixabay", "local", "douyin"]:
         st.error(tr("Please Select a Valid Video Source"))
         scroll_to_bottom()
         st.stop()
