@@ -145,6 +145,87 @@ def search_videos_pixabay(
     return []
 
 
+def search_videos_coverr(
+    search_term: str,
+    minimum_duration: int,
+    video_aspect: VideoAspect = VideoAspect.portrait,
+) -> List[MaterialInfo]:
+    """
+    Search Coverr for free stock videos (no Chinese text, high quality)
+    API Docs: https://api.coverr.co/docs/
+    """
+    aspect = VideoAspect(video_aspect)
+    video_orientation = aspect.name
+    video_width, video_height = aspect.to_resolution()
+
+    api_key = get_api_key("coverr_api_keys")
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Accept": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
+    }
+
+    # Build URL - Coverr API endpoint
+    params = {
+        "query": search_term,
+        "per_page": 20,
+        "orientation": video_orientation  # portrait or landscape
+    }
+    query_url = f"https://api.coverr.co/videos?{urlencode(params)}"
+    logger.info(f"searching Coverr videos: {query_url}, with proxies: {config.proxy}")
+
+    try:
+        r = requests.get(
+            query_url,
+            headers=headers,
+            proxies=config.proxy,
+            verify=False,
+            timeout=(30, 60),
+        )
+        response = r.json()
+        video_items = []
+
+        if "data" not in response:
+            logger.error(f"search Coverr videos failed: {response}")
+            return video_items
+
+        videos = response["data"]
+
+        # Loop through each video in the result
+        for v in videos:
+            duration = v.get("duration", 0)
+
+            # Check if video has desired minimum duration
+            if duration < minimum_duration:
+                continue
+
+            # Get the best quality video URL
+            video_files = v.get("urls", {})
+            video_url = None
+
+            # Coverr provides multiple quality options
+            # Priority: hd -> high -> medium -> low
+            for quality in ["hd", "high", "medium", "low"]:
+                if quality in video_files:
+                    video_url = video_files[quality]
+                    break
+
+            if video_url:
+                item = MaterialInfo()
+                item.provider = "coverr"
+                item.url = video_url
+                item.duration = duration
+                video_items.append(item)
+
+        logger.info(f"found {len(video_items)} Coverr videos for '{search_term}'")
+        return video_items
+
+    except Exception as e:
+        logger.error(f"search Coverr videos failed: {str(e)}")
+        return []
+
+
 def search_videos_tiktok(
     search_term: str,
     minimum_duration: int,
@@ -252,6 +333,8 @@ def download_videos(
     search_videos = search_videos_pexels
     if source == "pixabay":
         search_videos = search_videos_pixabay
+    elif source == "coverr":
+        search_videos = search_videos_coverr
     elif source == "tiktok" or source == "douyin":
         search_videos = search_videos_tiktok
 

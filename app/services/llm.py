@@ -367,29 +367,44 @@ Generate a script for a video, depending on the subject of the video.
 
 def generate_terms(video_subject: str, video_script: str, amount: int = 5) -> List[str]:
     prompt = f"""
-# Role: Video Search Terms Generator
+# Role: Visual Stock Video Search Terms Generator
 
-## Goals:
-Generate {amount} search terms for stock videos, depending on the subject of a video.
+## Goal:
+Generate {amount} VISUAL, context-aware search terms for stock footage that match the narrative and tone of the video script.
 
-## Constrains:
-1. the search terms are to be returned as a json-array of strings.
-2. each search term should consist of 1-3 words, always add the main subject of the video.
-3. you must only return the json-array of strings. you must not return anything else. you must not return the script.
-4. the search terms must be related to the subject of the video.
-5. reply with english search terms only.
+## Critical Rules:
+1. Return ONLY a JSON array of strings: ["term1", "term2", "term3", ...]
+2. Each term must be 2-4 words describing VISUAL concepts that can be found in stock footage
+3. Focus on what can be SEEN, not abstract concepts
+4. Match the emotional tone and context of the script
+5. Think about B-roll footage: people, objects, environments, actions
+6. Use ENGLISH only - no Chinese characters
 
-## Output Example:
-["search term 1", "search term 2", "search term 3","search term 4","search term 5"]
+## Examples of GOOD vs BAD terms:
 
-## Context:
+### For a medical/health topic:
+❌ BAD: "medical research", "health science" (too abstract)
+✅ GOOD: "doctor examining patient", "scientist using microscope", "medical test tubes lab", "tired person in bed"
+
+### For a technology topic:
+❌ BAD: "technology innovation", "digital transformation" (too abstract)
+✅ GOOD: "person typing laptop", "data center servers", "smartphone closeup", "futuristic city lights"
+
+### For a nature topic:
+❌ BAD: "environmental protection", "climate change" (too abstract)
+✅ GOOD: "mountain landscape sunrise", "ocean waves aerial", "forest trees sunlight", "green plants closeup"
+
+## Your Task:
+Analyze the script below and generate {amount} visual search terms that would find relevant stock footage.
+Think about: What scenes, objects, people, and actions would visually represent this content?
+
 ### Video Subject
 {video_subject}
 
 ### Video Script
 {video_script}
 
-Please note that you must use English for generating video search terms; Chinese is not accepted.
+Return ONLY the JSON array of {amount} visual search terms. No explanations, no extra text.
 """.strip()
 
     logger.info(f"subject: {video_subject}")

@@ -71,6 +71,8 @@
     "You can download the generated video from the following links": "You can download the generated video from the following links",
     "Pexels API Key": "Pexels API Key ([Get API Key](https://www.pexels.com/api/))",
     "Pixabay API Key": "Pixabay API Key ([Get API Key](https://pixabay.com/api/docs/#api_search_videos))",
+    "Coverr API Key": "Coverr API Key ([Apply for Access](https://coverr.co/developers)) - FREE, No Chinese text",
+    "Coverr": "Coverr",
     "Basic Settings": "**Basic Settings** (:blue[Click to expand])",
     "Language": "Language",
     "LLM Provider": "LLM Provider",
